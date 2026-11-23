@@ -1,0 +1,7 @@
+{
+  "/bens/page": "app/bens/page.js",
+  "/transferencias/nova/page": "app/transferencias/nova/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/bens/[id]/page": "app/bens/[id]/page.js",
+  "/transferencias/[id]/page": "app/transferencias/[id]/page.js"
+}

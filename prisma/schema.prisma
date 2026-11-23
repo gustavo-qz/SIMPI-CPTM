@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PerfilUsuario {
+  SOLICITANTE
+  PATRIMONIO
+  ORIGEM
+  DESTINO
+  LOGISTICA
+}
+
+enum StatusTransferencia {
+  RASCUNHO
+  AGUARDANDO_PATRIMONIO
+  AGUARDANDO_ORIGEM
+  AGUARDANDO_DESTINO
+  AGUARDANDO_LOGISTICA
+  EM_TRANSITO
+  CONCLUIDA
+  REPROVADA
+  CANCELADA
+}
+
+enum TipoEventoHistorico {
+  CRIADA
+  RASCUNHO_SALVO
+  ENVIADA_PATRIMONIO
+  VALIDADA_PATRIMONIO
+  APROVADA_ORIGEM
+  APROVADA_DESTINO
+  REPROVADA
+  CANCELADA
+  RETIRADA_CONFIRMADA
+  ENTREGA_CONFIRMADA
+}
+
+model Unidade {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  nome      String
+  sigla     String?
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  usuarios              Usuario[]
+  bensAtuais            BemPatrimonial[]
+  transferenciasOrigem  Transferencia[]  @relation("OrigemTransferencias")
+  transferenciasDestino Transferencia[]  @relation("DestinoTransferencias")
+}
+
+model Usuario {
+  id         String        @id @default(cuid())
+  nome       String
+  email      String        @unique
+  matricula  String?       @unique
+  senhaHash  String
+  perfil     PerfilUsuario
+  unidadeId  String
+  unidade    Unidade       @relation(fields: [unidadeId], references: [id])
+  ativo      Boolean       @default(true)
+  criadoEm   DateTime      @default(now())
+
+  transferenciasSolicitadas          Transferencia[]          @relation("SolicitanteTransferencias")
+  transferenciasValidadasPatrimonio  Transferencia[]          @relation("ValidadorPatrimonio")
+  transferenciasAprovadasOrigem      Transferencia[]          @relation("AprovadorOrigem")
+  transferenciasAprovadasDestino     Transferencia[]          @relation("AprovadorDestino")
+  transferenciasRetiradas            Transferencia[]          @relation("RetiradorLogistica")
+  transferenciasEntregues            Transferencia[]          @relation("EntregadorLogistica")
+  historicos                         HistoricoTransferencia[]
+}
+
+model BemPatrimonial {
+  id               String   @id @default(cuid())
+  codigoPatrimonio String   @unique
+  descricao        String
+  numeroSerie      String?
+  unidadeAtualId   String
+  unidadeAtual     Unidade  @relation(fields: [unidadeAtualId], references: [id])
+  localizacaoAtual String
+  statusBem        String   @default("ATIVO")
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @updatedAt
+
+  transferencias Transferencia[]
+}
+
+model Transferencia {
+  id                 String              @id @default(cuid())
+  codigoProtocolo    String              @unique
+  bemId              String
+  bem                BemPatrimonial      @relation(fields: [bemId], references: [id])
+  solicitanteId      String
+  solicitante        Usuario             @relation("SolicitanteTransferencias", fields: [solicitanteId], references: [id])
+  unidadeOrigemId    String
+  unidadeOrigem      Unidade             @relation("OrigemTransferencias", fields: [unidadeOrigemId], references: [id])
+  localizacaoOrigem  String
+  unidadeDestinoId   String
+  unidadeDestino     Unidade             @relation("DestinoTransferencias", fields: [unidadeDestinoId], references: [id])
+  localizacaoDestino String
+  justificativa      String
+  motivoEncerramento String?
+  status             StatusTransferencia @default(RASCUNHO)
+
+  // Validação Patrimônio (DFAS)
+  validadoPatrimonioEm   DateTime?
+  validadoPatrimonioPorId String?
+  validadoPatrimonioPor   Usuario?  @relation("ValidadorPatrimonio", fields: [validadoPatrimonioPorId], references: [id])
+
+  // Aprovação Origem
+  aprovadoOrigemEm    DateTime?
+  aprovadoOrigemPorId String?
+  aprovadoOrigemPor    Usuario?  @relation("AprovadorOrigem", fields: [aprovadoOrigemPorId], references: [id])
+
+  // Aprovação Destino
+  aprovadoDestinoEm    DateTime?
+  aprovadoDestinoPorId String?
+  aprovadoDestinoPor   Usuario?  @relation("AprovadorDestino", fields: [aprovadoDestinoPorId], references: [id])
+
+  // Retirada Logística (DFAL)
+  retiradaEm    DateTime?
+  retiradaPorId String?
+  retiradaPor   Usuario?  @relation("RetiradorLogistica", fields: [retiradaPorId], references: [id])
+
+  // Entrega Logística (DFAL)
+  entregaEm    DateTime?
+  entregaPorId String?
+  entregaPor   Usuario?  @relation("EntregadorLogistica", fields: [entregaPorId], references: [id])
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  historicos HistoricoTransferencia[]
+}
+
+model HistoricoTransferencia {
+  id              String              @id @default(cuid())
+  transferenciaId String
+  transferencia   Transferencia       @relation(fields: [transferenciaId], references: [id], onDelete: Cascade)
+  usuarioId       String
+  usuario         Usuario             @relation(fields: [usuarioId], references: [id])
+  perfilAtor      PerfilUsuario
+  tipoEvento      TipoEventoHistorico
+  statusAnterior  StatusTransferencia?
+  statusNovo      StatusTransferencia
+  observacao      String?
+  ocorridoEm      DateTime            @default(now())
+
+  @@index([transferenciaId])
+}
